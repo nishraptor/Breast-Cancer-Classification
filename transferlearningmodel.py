@@ -25,9 +25,3 @@ class Net(nn.Module):
     def forward(self, x):
         x = self.resnet50(x)
         return x
-
-
-
-
-net = Net()
-print(net)
