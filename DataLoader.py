@@ -1,3 +1,7 @@
+import torchvision.transforms as transform
+import pandas as pd
+from torch.utils import data
+
 class Dataset(data.Dataset):
     """
     Args:
@@ -20,12 +24,12 @@ class Dataset(data.Dataset):
         # Select sample
         img_name = self.frame.iloc[index, 6]
         image = io.imread(img_name)
-        
+
         label = self.frame.iloc[index, 3]
         # Load data and get label
-         
+
         sample = {'image': image, 'label': label}
-        
+
         if self.transform:
             sample = self.transform(sample)
 
