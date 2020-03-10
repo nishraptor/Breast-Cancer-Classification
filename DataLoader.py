@@ -19,7 +19,7 @@ class Dataset(data.Dataset):
         'Denotes the total number of samples'
         return len(self.frame)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index):        
         'Generates one sample of data'
         # Select sample
         img_name = self.frame.iloc[index, 6]
