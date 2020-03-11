@@ -1,13 +1,35 @@
+import IPython.display as display
+from PIL import Image
+import matplotlib.pyplot as plt
+import os
+from torch.utils import data
+
 import numpy as np
 import matplotlib.pyplot as plt
 from transferlearningmodel import Net
 from DataLoader import Dataset
-from sklearn.model_selection import train_test_split
 
 import torch
 from torch import nn
 import torchvision
 import torchvision.transforms as transform
+
+from sklearn.model_selection import train_test_split
+
+import tensorflow as tf
+from PIL import Image
+import numpy as np
+import cv2
+import glob
+import time
+
+import os.path
+
+import matplotlib.pyplot as plt
+from transferlearningmodel import Net
+from DataLoader import Dataset
+
+from torch.utils.data.sampler import SubsetRandomSampler
 
 # Test dataset using pytorch's CIFAR10 class which contains classes for ‘airplane’,
 # ‘automobile’, ‘bird’, ‘cat’, ‘deer’, ‘dog’, ‘frog’, ‘horse’, ‘ship’, ‘truck’. The images in
@@ -22,7 +44,7 @@ import torchvision.transforms as transform
 # description: train a neural network model on the training set and test the validation set
 # args: train_loader - tuples of images and labels for the training set
 #       val_loader - tuples of images and labels for the validation set
-def train(train_loader, val_loader):
+def train_model(train_loader, val_loader):
 
     # Define relevant testing parameters - the loss per iteration/epoch for training
     # and validation sets
@@ -36,16 +58,17 @@ def train(train_loader, val_loader):
     model = Net()
 
     # Define the cost function
-    criterion = nn.BCELost()
+    criterion = nn.BCELoss()
 
     # Define the optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr = 1e-3)
 
-    best_val_loss = float('inf') # hold off on variable for now (use this to check if the model loss is increasing x number of times)
+    best_val_loss = float('inf') 
+    # hold off on variable for now (use this to check if the model loss is increasing x number of times)
 
     # Runs through one batch in the train_loader
-    for epoch in range(3):
-
+    for epoch in range(1):
+        print("epoch: ", epoch)
         # Define variables to accumulate the loss over the total epoch
         train_epoch_loss_var = 0
         val_epoch_loss_var = 0
@@ -53,8 +76,12 @@ def train(train_loader, val_loader):
         # This for loop is for the training set data
         # ********** Coordinate with the dataloader *************
         # this for loops is looking for a tuple(?) of images and labels
-        for (imgs, labels) in train_loader:
-
+#         for imgs, (_, labels) in train_loader:
+        for i, (imgs,labels) in enumerate(train_loader):
+        
+            print("minibatch: ", i, " out of ", len(train_loader))
+            
+            labels = labels.view(labels.size(0), 1)
             # Zeroes the gradients so they don't accumulate
             optimizer.zero_grad()
 
@@ -62,8 +89,8 @@ def train(train_loader, val_loader):
             outputs = model(imgs)
 
             # Assigns the loss function to the outputs
-            loss = criterion(outputs, labels)
-            clear(outputs)
+            loss = criterion(outputs, labels.float())
+#             clear(outputs)
 
             # Computes the gradients with respect to the cost function
             loss.backward()
@@ -73,16 +100,19 @@ def train(train_loader, val_loader):
 
             train_loss_per_iter.append(loss)
             train_epoch_loss_var += loss
+            
+            print("loss: ", loss)
 
 
         # This for loop is for the validation set data
-        for (imgs, labels) in val_loader:
-
+        for  i, (imgs,labels) in enumerate(val_loader):
+            
+            labels = labels.view(labels.size(0), 1)
             # Pass one image forward through the cnn
             outputs = model(imgs)
 
             # Assigns the loss function to the outputs
-            loss = criterion(outputs, labels)
+            loss = criterion(outputs, labels.float())
 
             # Save loss per iteration
             val_loss_per_iter.append(loss)
@@ -91,6 +121,10 @@ def train(train_loader, val_loader):
     # Save values of loss over total epoch
     train_epoch_loss.append(train_epoch_loss_var)
     val_epoch_loss.append(val_epoch_loss_var)
+    
+    torch.save(model, 'saved_model.pt')
+    
+    return  train_loss_per_iter, train_epoch_loss, val_loss_per_iter, val_epoch_loss, val_epoch_acc
 
 # get_loader function
 # description: takes a csv file with information of the image dataset and splits the dataset
@@ -102,32 +136,47 @@ def train(train_loader, val_loader):
 #       random_state - seed used by random number generator
 #       shuffle - whether or not to shuffle the data before splitting
 #       stratify - if not None, data is split in a stratified fashion
-def get_loader(dataset, test_size, train_size, val_size, random_state, shuffle, stratify):
+batch_size = 2
 
-    # have dataloader class read in the csv file
-    samples = DataLoader(dataset)
+def loadData():
+ 
+    #Create the dataset
+    dataset = Dataset(csv_file = 'csv.csv', \
+                     transform = transform.Compose([transform.Resize((100,100)), \
+                                                    transform.ToTensor(),\
+                                                   transform.Normalize((0.5, 0.5, 0.5), \
+                                                                        (0.5, 0.5, 0.5))]))
+    
+    dataset_size = len(dataset)
+    indices = list(range(dataset_size))
+    split1 = int(np.floor(.6 * dataset_size))
+    split2 = int(np.floor(.8 * dataset_size))
+    train_indices, val_indices, test_indices = indices[: split1], indices[split1: split2], indices[split2: ]
+ 
+    train_sampler = SubsetRandomSampler(train_indices)
+    valid_sampler = SubsetRandomSampler(val_indices)
+    test_sampler = SubsetRandomSampler(test_indices)
+ 
+    trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
+                                               sampler=train_sampler)
+    valloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
+                                           sampler=valid_sampler)
+    testloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
+                                                    sampler=test_sampler)
+ 
+ 
+    return trainloader, valloader, testloader
 
-    # create list of image matrices
-    matrixes = []
-    matrixes = [matrixes.append(x['image']) for x in samples]
-
-    # create list of image classification (either malignant or benign)
-    targets = []
-    matrixes = [matrixes.append(x['label']) for x in samples]
-
-    # split the dataset into training/validation and testing lists
-    X_train, X_test, y_train, y_test = train_test_split(matrixes, target, test_size = test_size, train_size = train_size + val_size, random_state = random_state, shuffle = shuffle, stratify = stratify)
-
-    # split the training/validation list further into training and validation lists
-    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size = val_size, train_size = train_size, random_state = random_state, shuffle = shuffle, stratify = stratify)
-
-    # concatenate the images and labels into a tuple for each set type
-    train = [(X_train[i], y_train[i]) for i in range(0, len(X_train))]
-    val = [(X_val[i], y_val[i]) for i in range(0, len(X_val))]
-    test = [(X_test[i], y_test[i]) for i in range(0, len(X_test))]
-
-    return train, val, test
-
+def show_batch(images, labels):
+ 
+        batch_size = len(images)
+        im_size = images.size(0)
+        grid_border_size = 3
+     
+        grid = make_grid(images)
+        plt.imshow(grid.numpy().transpose())
+        plt.title('Batch from dataloader')
+        plt.show()
 
 def evaluate(model, test_loader):
     # evaluation function at the end

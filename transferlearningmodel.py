@@ -20,8 +20,10 @@ class Net(nn.Module):
 
         # Replace the last layer with our desired output size
         self.resnet50.fc = nn.Linear(2048, 1)
+        self.sig = nn.Sigmoid()
 
     # Forward function
     def forward(self, x):
         x = self.resnet50(x)
+        x = self.sig(x)
         return x
